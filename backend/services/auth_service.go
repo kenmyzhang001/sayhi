@@ -4,29 +4,19 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"sayhi/backend/database"
 	"sayhi/backend/models"
 	"sayhi/backend/utils"
-	"sync"
 )
 
 // AuthService 认证服务
 type AuthService struct {
-	mu    sync.RWMutex
-	users map[string]*models.User // username -> User
+	// 使用数据库存储，不再使用内存缓存
 }
 
 // NewAuthService 创建认证服务
 func NewAuthService() *AuthService {
-	service := &AuthService{
-		users: make(map[string]*models.User),
-	}
-
-	// 只在没有用户时才初始化默认管理员账号（避免重启时覆盖已有数据）
-	// 注意：由于使用内存存储，重启后数据会丢失
-	// 如果需要持久化，应该使用数据库存储
-	// 这里保留初始化逻辑，但实际使用时建议迁移到数据库
-
-	return service
+	return &AuthService{}
 }
 
 // hashPassword 密码加密（使用MD5，生产环境建议使用bcrypt）
@@ -37,17 +27,27 @@ func hashPassword(password string) string {
 
 // Register 注册用户
 func (as *AuthService) Register(username, password string) error {
-	as.mu.Lock()
-	defer as.mu.Unlock()
-
-	if _, exists := as.users[username]; exists {
+	// 检查用户名是否已存在
+	var count int
+	err := database.DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", username).Scan(&count)
+	if err != nil {
+		return errors.New("查询用户失败: " + err.Error())
+	}
+	if count > 0 {
 		return errors.New("用户名已存在")
 	}
 
-	as.users[username] = &models.User{
-		ID:       int64(len(as.users) + 1),
-		Username: username,
-		Password: hashPassword(password),
+	// 插入新用户
+	hashedPassword := hashPassword(password)
+	result, err := database.DB.Exec("INSERT INTO users (username, password) VALUES (?, ?)", username, hashedPassword)
+	if err != nil {
+		return errors.New("注册用户失败: " + err.Error())
+	}
+
+	// 验证插入成功
+	rowsAffected, err := result.RowsAffected()
+	if err != nil || rowsAffected == 0 {
+		return errors.New("注册用户失败")
 	}
 
 	return nil
@@ -55,11 +55,11 @@ func (as *AuthService) Register(username, password string) error {
 
 // Login 用户登录
 func (as *AuthService) Login(username, password string) (string, error) {
-	as.mu.RLock()
-	user, exists := as.users[username]
-	as.mu.RUnlock()
-
-	if !exists {
+	// 从数据库查询用户
+	var user models.User
+	err := database.DB.QueryRow("SELECT id, username, password FROM users WHERE username = ?", username).
+		Scan(&user.ID, &user.Username, &user.Password)
+	if err != nil {
 		return "", errors.New("用户名或密码错误")
 	}
 
@@ -84,28 +84,28 @@ func (as *AuthService) ValidateToken(token string) (*models.User, error) {
 		return nil, errors.New("无效的token")
 	}
 
-	as.mu.RLock()
-	user, exists := as.users[claims.Username]
-	as.mu.RUnlock()
-
-	if !exists {
+	// 从数据库查询用户
+	var user models.User
+	err = database.DB.QueryRow("SELECT id, username, password FROM users WHERE username = ?", claims.Username).
+		Scan(&user.ID, &user.Username, &user.Password)
+	if err != nil {
 		return nil, errors.New("用户不存在")
 	}
 
-	return user, nil
+	return &user, nil
 }
 
 // GetUser 获取用户信息
 func (as *AuthService) GetUser(username string) (*models.User, error) {
-	as.mu.RLock()
-	defer as.mu.RUnlock()
-
-	user, exists := as.users[username]
-	if !exists {
+	// 从数据库查询用户
+	var user models.User
+	err := database.DB.QueryRow("SELECT id, username, password FROM users WHERE username = ?", username).
+		Scan(&user.ID, &user.Username, &user.Password)
+	if err != nil {
 		return nil, errors.New("用户不存在")
 	}
 
 	// 不返回密码
 	user.Password = ""
-	return user, nil
+	return &user, nil
 }

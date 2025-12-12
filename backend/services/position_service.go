@@ -1,114 +1,111 @@
 package services
 
 import (
-	"sync"
+	"sayhi/backend/database"
 )
 
-// PositionService 位置值服务（内存存储，生产环境应使用数据库）
+// PositionService 位置值服务（使用数据库存储）
 type PositionService struct {
-	mu        sync.RWMutex
-	positions map[string][]string // position -> values
+	// 使用数据库存储，不再使用内存缓存
 }
 
 // NewPositionService 创建位置值服务
 func NewPositionService() *PositionService {
-	return &PositionService{
-		positions: make(map[string][]string),
-	}
+	return &PositionService{}
 }
 
 // GetAllPositions 获取所有位置值
 func (ps *PositionService) GetAllPositions() map[string][]string {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
 	result := make(map[string][]string)
-	for k, v := range ps.positions {
-		result[k] = make([]string, len(v))
-		copy(result[k], v)
+
+	rows, err := database.DB.Query("SELECT position, value FROM position_values ORDER BY position, sort_order")
+	if err != nil {
+		return result
 	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var position, value string
+		if err := rows.Scan(&position, &value); err != nil {
+			continue
+		}
+		result[position] = append(result[position], value)
+	}
+
 	return result
 }
 
 // GetPositionValues 获取指定位置的值
 func (ps *PositionService) GetPositionValues(position string) []string {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
+	var values []string
 
-	values, exists := ps.positions[position]
-	if !exists {
-		return []string{}
+	rows, err := database.DB.Query("SELECT value FROM position_values WHERE position = ? ORDER BY sort_order", position)
+	if err != nil {
+		return values
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			continue
+		}
+		values = append(values, value)
 	}
 
-	result := make([]string, len(values))
-	copy(result, values)
-	return result
+	return values
 }
 
 // AddPositionValue 添加位置值
 func (ps *PositionService) AddPositionValue(position string, value string) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-
-	if ps.positions[position] == nil {
-		ps.positions[position] = []string{}
-	}
-
 	// 检查是否已存在
-	for _, v := range ps.positions[position] {
-		if v == value {
-			return // 已存在，不重复添加
-		}
+	var count int
+	database.DB.QueryRow("SELECT COUNT(*) FROM position_values WHERE position = ? AND value = ?", position, value).Scan(&count)
+	if count > 0 {
+		return // 已存在，不重复添加
 	}
 
-	ps.positions[position] = append(ps.positions[position], value)
+	// 获取当前最大排序值
+	var maxSort int
+	database.DB.QueryRow("SELECT COALESCE(MAX(sort_order), 0) FROM position_values WHERE position = ?", position).Scan(&maxSort)
+
+	// 插入新值
+	database.DB.Exec("INSERT INTO position_values (position, value, sort_order) VALUES (?, ?, ?)", position, value, maxSort+1)
 }
 
 // SetPositionValues 设置位置的所有值
 func (ps *PositionService) SetPositionValues(position string, values []string) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
+	// 开启事务
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
 
-	ps.positions[position] = make([]string, len(values))
-	copy(ps.positions[position], values)
+	// 删除该位置的所有旧值
+	_, err = tx.Exec("DELETE FROM position_values WHERE position = ?", position)
+	if err != nil {
+		return
+	}
+
+	// 插入新值
+	for i, value := range values {
+		_, err = tx.Exec("INSERT INTO position_values (position, value, sort_order) VALUES (?, ?, ?)", position, value, i+1)
+		if err != nil {
+			return
+		}
+	}
+
+	// 提交事务
+	tx.Commit()
 }
 
 // DeletePositionValue 删除位置值
 func (ps *PositionService) DeletePositionValue(position string, value string) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-
-	values, exists := ps.positions[position]
-	if !exists {
-		return
-	}
-
-	var newValues []string
-	for _, v := range values {
-		if v != value {
-			newValues = append(newValues, v)
-		}
-	}
-
-	ps.positions[position] = newValues
+	database.DB.Exec("DELETE FROM position_values WHERE position = ? AND value = ?", position, value)
 }
 
 // UpdatePositionValue 更新位置值
 func (ps *PositionService) UpdatePositionValue(position string, oldValue string, newValue string) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-
-	values, exists := ps.positions[position]
-	if !exists {
-		return
-	}
-
-	for i, v := range values {
-		if v == oldValue {
-			values[i] = newValue
-			break
-		}
-	}
-
-	ps.positions[position] = values
+	database.DB.Exec("UPDATE position_values SET value = ? WHERE position = ? AND value = ?", newValue, position, oldValue)
 }

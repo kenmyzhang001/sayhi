@@ -2,121 +2,164 @@ package services
 
 import (
 	"errors"
+	"sayhi/backend/database"
 	"sayhi/backend/models"
-	"sync"
 )
 
-// SpeechService 话术服务（内存存储，生产环境应使用数据库）
+// SpeechService 话术服务（使用数据库存储）
 type SpeechService struct {
-	mu     sync.RWMutex
-	groups map[int64]*models.SpeechGroup
-	nextID int64
+	// 使用数据库存储，不再使用内存缓存
 }
 
 // NewSpeechService 创建话术服务
 func NewSpeechService() *SpeechService {
-	service := &SpeechService{
-		groups: make(map[int64]*models.SpeechGroup),
-		nextID: 1,
-	}
-
-	// 不再自动初始化默认话术组，避免重启时覆盖已有数据
-	// 如果需要默认数据，可以通过API手动创建
-	// service.initDefaultGroups()
-
-	return service
-}
-
-// initDefaultGroups 初始化默认话术组
-func (ss *SpeechService) initDefaultGroups() {
-	// 示例：数字范围话术组
-	ss.CreateGroup(&models.SpeechGroupRequest{
-		Name:        "数字3-10",
-		Description: "数字范围3到10",
-		Speeches:    []string{"3", "4", "5", "6", "7", "8", "9", "10"},
-	})
-
-	// 示例：问候语话术组
-	ss.CreateGroup(&models.SpeechGroupRequest{
-		Name:        "问候语",
-		Description: "常用问候语",
-		Speeches:    []string{"您好", "早上好", "下午好", "晚上好", "欢迎"},
-	})
+	return &SpeechService{}
 }
 
 // CreateGroup 创建话术组
 func (ss *SpeechService) CreateGroup(req *models.SpeechGroupRequest) (*models.SpeechGroup, error) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
 	// 检查名称是否重复
-	for _, group := range ss.groups {
-		if group.Name == req.Name {
-			return nil, errors.New("话术组名称已存在")
+	var count int
+	err := database.DB.QueryRow("SELECT COUNT(*) FROM speech_groups WHERE name = ?", req.Name).Scan(&count)
+	if err != nil {
+		return nil, errors.New("查询话术组失败: " + err.Error())
+	}
+	if count > 0 {
+		return nil, errors.New("话术组名称已存在")
+	}
+
+	// 开启事务
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return nil, errors.New("开启事务失败: " + err.Error())
+	}
+	defer tx.Rollback()
+
+	// 插入话术组
+	result, err := tx.Exec("INSERT INTO speech_groups (name, description) VALUES (?, ?)", req.Name, req.Description)
+	if err != nil {
+		return nil, errors.New("创建话术组失败: " + err.Error())
+	}
+
+	groupID, err := result.LastInsertId()
+	if err != nil {
+		return nil, errors.New("获取话术组ID失败: " + err.Error())
+	}
+
+	// 插入话术内容
+	for i, speech := range req.Speeches {
+		_, err = tx.Exec("INSERT INTO speeches (group_id, content, sort_order) VALUES (?, ?, ?)", groupID, speech, i+1)
+		if err != nil {
+			return nil, errors.New("插入话术失败: " + err.Error())
 		}
 	}
 
+	// 提交事务
+	if err = tx.Commit(); err != nil {
+		return nil, errors.New("提交事务失败: " + err.Error())
+	}
+
+	// 返回创建的话术组
 	group := &models.SpeechGroup{
-		ID:          ss.nextID,
+		ID:          groupID,
 		Name:        req.Name,
 		Description: req.Description,
 		Speeches:    make([]string, len(req.Speeches)),
 	}
-
 	copy(group.Speeches, req.Speeches)
-
-	ss.groups[ss.nextID] = group
-	ss.nextID++
 
 	return group, nil
 }
 
 // GetGroup 获取话术组
 func (ss *SpeechService) GetGroup(id int64) (*models.SpeechGroup, error) {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-
-	group, exists := ss.groups[id]
-	if !exists {
+	var group models.SpeechGroup
+	err := database.DB.QueryRow("SELECT id, name, description FROM speech_groups WHERE id = ?", id).
+		Scan(&group.ID, &group.Name, &group.Description)
+	if err != nil {
 		return nil, errors.New("话术组不存在")
 	}
 
-	// 返回副本
-	result := *group
-	result.Speeches = make([]string, len(group.Speeches))
-	copy(result.Speeches, group.Speeches)
+	// 获取话术内容
+	rows, err := database.DB.Query("SELECT content FROM speeches WHERE group_id = ? ORDER BY sort_order", id)
+	if err != nil {
+		return nil, errors.New("查询话术失败: " + err.Error())
+	}
+	defer rows.Close()
 
-	return &result, nil
+	var speeches []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			continue
+		}
+		speeches = append(speeches, content)
+	}
+	group.Speeches = speeches
+
+	return &group, nil
 }
 
 // GetGroupByName 根据名称获取话术组
 func (ss *SpeechService) GetGroupByName(name string) (*models.SpeechGroup, error) {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
-
-	for _, group := range ss.groups {
-		if group.Name == name {
-			result := *group
-			result.Speeches = make([]string, len(group.Speeches))
-			copy(result.Speeches, group.Speeches)
-			return &result, nil
-		}
+	var group models.SpeechGroup
+	err := database.DB.QueryRow("SELECT id, name, description FROM speech_groups WHERE name = ?", name).
+		Scan(&group.ID, &group.Name, &group.Description)
+	if err != nil {
+		return nil, errors.New("话术组不存在")
 	}
 
-	return nil, errors.New("话术组不存在")
+	// 获取话术内容
+	rows, err := database.DB.Query("SELECT content FROM speeches WHERE group_id = ? ORDER BY sort_order", group.ID)
+	if err != nil {
+		return nil, errors.New("查询话术失败: " + err.Error())
+	}
+	defer rows.Close()
+
+	var speeches []string
+	for rows.Next() {
+		var content string
+		if err := rows.Scan(&content); err != nil {
+			continue
+		}
+		speeches = append(speeches, content)
+	}
+	group.Speeches = speeches
+
+	return &group, nil
 }
 
 // GetAllGroups 获取所有话术组
 func (ss *SpeechService) GetAllGroups() []models.SpeechGroup {
-	ss.mu.RLock()
-	defer ss.mu.RUnlock()
+	rows, err := database.DB.Query("SELECT id, name, description FROM speech_groups ORDER BY id")
+	if err != nil {
+		return []models.SpeechGroup{}
+	}
+	defer rows.Close()
 
-	groups := make([]models.SpeechGroup, 0, len(ss.groups))
-	for _, group := range ss.groups {
-		result := *group
-		result.Speeches = make([]string, len(group.Speeches))
-		copy(result.Speeches, group.Speeches)
-		groups = append(groups, result)
+	var groups []models.SpeechGroup
+	for rows.Next() {
+		var group models.SpeechGroup
+		if err := rows.Scan(&group.ID, &group.Name, &group.Description); err != nil {
+			continue
+		}
+
+		// 获取话术内容
+		speechRows, err := database.DB.Query("SELECT content FROM speeches WHERE group_id = ? ORDER BY sort_order", group.ID)
+		if err == nil {
+			var speeches []string
+			for speechRows.Next() {
+				var content string
+				if err := speechRows.Scan(&content); err != nil {
+					continue
+				}
+				speeches = append(speeches, content)
+			}
+			group.Speeches = speeches
+			speechRows.Close()
+		}
+
+		groups = append(groups, group)
 	}
 
 	return groups
@@ -124,50 +167,90 @@ func (ss *SpeechService) GetAllGroups() []models.SpeechGroup {
 
 // UpdateGroup 更新话术组
 func (ss *SpeechService) UpdateGroup(id int64, req *models.SpeechGroupUpdateRequest) (*models.SpeechGroup, error) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	group, exists := ss.groups[id]
-	if !exists {
+	// 检查话术组是否存在
+	var currentName string
+	err := database.DB.QueryRow("SELECT name FROM speech_groups WHERE id = ?", id).Scan(&currentName)
+	if err != nil {
 		return nil, errors.New("话术组不存在")
 	}
 
 	// 如果更新名称，检查是否与其他组重复
-	if req.Name != "" && req.Name != group.Name {
-		for _, g := range ss.groups {
-			if g.ID != id && g.Name == req.Name {
-				return nil, errors.New("话术组名称已存在")
+	if req.Name != "" && req.Name != currentName {
+		var count int
+		err := database.DB.QueryRow("SELECT COUNT(*) FROM speech_groups WHERE name = ? AND id != ?", req.Name, id).Scan(&count)
+		if err != nil {
+			return nil, errors.New("查询话术组失败: " + err.Error())
+		}
+		if count > 0 {
+			return nil, errors.New("话术组名称已存在")
+		}
+	}
+
+	// 开启事务
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return nil, errors.New("开启事务失败: " + err.Error())
+	}
+	defer tx.Rollback()
+
+	// 更新话术组基本信息
+	if req.Name != "" || req.Description != "" {
+		if req.Name != "" && req.Description != "" {
+			_, err = tx.Exec("UPDATE speech_groups SET name = ?, description = ? WHERE id = ?", req.Name, req.Description, id)
+		} else if req.Name != "" {
+			_, err = tx.Exec("UPDATE speech_groups SET name = ? WHERE id = ?", req.Name, id)
+		} else {
+			_, err = tx.Exec("UPDATE speech_groups SET description = ? WHERE id = ?", req.Description, id)
+		}
+		if err != nil {
+			return nil, errors.New("更新话术组失败: " + err.Error())
+		}
+	}
+
+	// 如果更新话术内容
+	if len(req.Speeches) > 0 {
+		// 删除旧的话术
+		_, err = tx.Exec("DELETE FROM speeches WHERE group_id = ?", id)
+		if err != nil {
+			return nil, errors.New("删除旧话术失败: " + err.Error())
+		}
+
+		// 插入新话术
+		for i, speech := range req.Speeches {
+			_, err = tx.Exec("INSERT INTO speeches (group_id, content, sort_order) VALUES (?, ?, ?)", id, speech, i+1)
+			if err != nil {
+				return nil, errors.New("插入话术失败: " + err.Error())
 			}
 		}
-		group.Name = req.Name
 	}
 
-	if req.Description != "" {
-		group.Description = req.Description
+	// 提交事务
+	if err = tx.Commit(); err != nil {
+		return nil, errors.New("提交事务失败: " + err.Error())
 	}
 
-	if len(req.Speeches) > 0 {
-		group.Speeches = make([]string, len(req.Speeches))
-		copy(group.Speeches, req.Speeches)
-	}
-
-	result := *group
-	result.Speeches = make([]string, len(group.Speeches))
-	copy(result.Speeches, group.Speeches)
-
-	return &result, nil
+	// 返回更新后的话术组
+	return ss.GetGroup(id)
 }
 
 // DeleteGroup 删除话术组
 func (ss *SpeechService) DeleteGroup(id int64) error {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	if _, exists := ss.groups[id]; !exists {
+	// 检查话术组是否存在
+	var count int
+	err := database.DB.QueryRow("SELECT COUNT(*) FROM speech_groups WHERE id = ?", id).Scan(&count)
+	if err != nil {
+		return errors.New("查询话术组失败: " + err.Error())
+	}
+	if count == 0 {
 		return errors.New("话术组不存在")
 	}
 
-	delete(ss.groups, id)
+	// 删除话术组（由于外键约束，会自动删除关联的话术）
+	_, err = database.DB.Exec("DELETE FROM speech_groups WHERE id = ?", id)
+	if err != nil {
+		return errors.New("删除话术组失败: " + err.Error())
+	}
+
 	return nil
 }
 

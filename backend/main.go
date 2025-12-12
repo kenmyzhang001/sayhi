@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sayhi/backend/config"
+	"sayhi/backend/database"
 	"sayhi/backend/handlers"
 	"sayhi/backend/middleware"
 	"sayhi/backend/services"
@@ -14,6 +16,13 @@ import (
 func main() {
 	// 加载配置
 	cfg := config.LoadConfig()
+
+	// 初始化数据库连接
+	if err := database.InitDB(&cfg.Database); err != nil {
+		log.Fatalf("数据库初始化失败: %v", err)
+	}
+	defer database.CloseDB()
+	fmt.Println("数据库连接成功")
 
 	// 设置Gin模式
 	gin.SetMode(cfg.Server.Mode)
