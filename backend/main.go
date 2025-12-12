@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"sayhi/backend/config"
 	"sayhi/backend/handlers"
 	"sayhi/backend/middleware"
 	"sayhi/backend/services"
@@ -10,6 +12,12 @@ import (
 )
 
 func main() {
+	// 加载配置
+	cfg := config.LoadConfig()
+
+	// 设置Gin模式
+	gin.SetMode(cfg.Server.Mode)
+
 	// 创建Gin引擎
 	r := gin.Default()
 
@@ -66,6 +74,7 @@ func main() {
 	})
 
 	// 启动服务器
-	r.Run(":8080")
+	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
+	fmt.Printf("服务器启动在: http://%s\n", addr)
+	r.Run(addr)
 }
-

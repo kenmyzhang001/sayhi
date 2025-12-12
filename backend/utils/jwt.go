@@ -2,12 +2,19 @@ package utils
 
 import (
 	"errors"
+	"sayhi/backend/config"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("sayhi-secret-key-change-in-production")
+// getJWTSecret 获取JWT密钥
+func getJWTSecret() []byte {
+	if config.AppConfig != nil {
+		return []byte(config.AppConfig.JWT.Secret)
+	}
+	return []byte("sayhi-secret-key-change-in-production")
+}
 
 // Claims JWT声明
 type Claims struct {
@@ -19,7 +26,11 @@ type Claims struct {
 // GenerateToken 生成JWT token
 func GenerateToken(username string, userID int64) (string, error) {
 	nowTime := time.Now()
-	expireTime := nowTime.Add(24 * time.Hour) // 24小时过期
+	expireHours := 24
+	if config.AppConfig != nil {
+		expireHours = config.AppConfig.JWT.ExpireTime
+	}
+	expireTime := nowTime.Add(time.Duration(expireHours) * time.Hour)
 
 	claims := Claims{
 		Username: username,
@@ -32,14 +43,14 @@ func GenerateToken(username string, userID int64) (string, error) {
 	}
 
 	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token, err := tokenClaims.SignedString(jwtSecret)
+	token, err := tokenClaims.SignedString(getJWTSecret())
 	return token, err
 }
 
 // ParseToken 解析JWT token
 func ParseToken(token string) (*Claims, error) {
 	tokenClaims, err := jwt.ParseWithClaims(token, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
+		return getJWTSecret(), nil
 	})
 
 	if err != nil {

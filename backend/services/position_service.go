@@ -1,7 +1,6 @@
 package services
 
 import (
-	"sayhi/backend/models"
 	"sync"
 )
 
@@ -113,4 +112,3 @@ func (ps *PositionService) UpdatePositionValue(position string, oldValue string,
 
 	ps.positions[position] = values
 }
-

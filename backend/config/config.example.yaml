@@ -1,0 +1,31 @@
+# 配置文件示例
+# 复制此文件为 config.yaml 并修改相应配置
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: "8080"
+  mode: "debug"
+
+# 数据库配置
+database:
+  type: "mysql"         # mysql, postgresql, sqlite
+  host: "localhost"
+  port: "3306"
+  user: "root"
+  password: "your_password"
+  database: "sayhi"
+  charset: "utf8mb4"
+  max_idle: 10
+  max_open: 100
+
+# JWT配置
+jwt:
+  secret: "your-secret-key-change-in-production"
+  expire_time: 24
+
+# 日志配置
+log:
+  level: "info"
+  file: "logs/app.log"
+
