@@ -8,6 +8,8 @@
           :default-active="activeIndex"
           @select="handleMenuSelect"
           class="app-menu"
+          :collapse="false"
+          :ellipsis="false"
         >
           <el-menu-item index="1" @click="$router.push('/')">模板生成</el-menu-item>
           <el-menu-item index="3" @click="$router.push('/speech-groups')">话术管理</el-menu-item>
@@ -104,7 +106,7 @@ const handleCommand = async (command) => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 220px;
 }
 
 .user-dropdown {
@@ -126,10 +128,30 @@ const handleCommand = async (command) => {
 .app-menu {
   background-color: transparent;
   border: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-menu :deep(.el-menu--horizontal) {
+  border-bottom: none;
+}
+
+.app-menu :deep(.el-menu--horizontal .el-menu-item) {
+  display: inline-flex !important;
+  visibility: visible !important;
 }
 
 .app-menu :deep(.el-menu-item) {
   color: white;
+  white-space: nowrap;
+}
+
+.app-menu :deep(.el-submenu) {
+  display: none !important;
+}
+
+.app-menu :deep(.el-menu--horizontal .el-submenu) {
+  display: none !important;
 }
 
 .app-menu :deep(.el-menu-item.is-active) {
