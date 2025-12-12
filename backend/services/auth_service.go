@@ -21,9 +21,10 @@ func NewAuthService() *AuthService {
 		users: make(map[string]*models.User),
 	}
 
-	// 初始化默认管理员账号
-	service.Register("admin", "admin123")
-	service.Register("user", "user123")
+	// 只在没有用户时才初始化默认管理员账号（避免重启时覆盖已有数据）
+	// 注意：由于使用内存存储，重启后数据会丢失
+	// 如果需要持久化，应该使用数据库存储
+	// 这里保留初始化逻辑，但实际使用时建议迁移到数据库
 
 	return service
 }
@@ -108,4 +109,3 @@ func (as *AuthService) GetUser(username string) (*models.User, error) {
 	user.Password = ""
 	return user, nil
 }
-

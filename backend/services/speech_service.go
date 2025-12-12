@@ -20,8 +20,9 @@ func NewSpeechService() *SpeechService {
 		nextID: 1,
 	}
 
-	// 初始化示例话术组
-	service.initDefaultGroups()
+	// 不再自动初始化默认话术组，避免重启时覆盖已有数据
+	// 如果需要默认数据，可以通过API手动创建
+	// service.initDefaultGroups()
 
 	return service
 }
@@ -201,4 +202,3 @@ func parseInt64(s string) (int64, error) {
 	}
 	return result, err
 }
-
