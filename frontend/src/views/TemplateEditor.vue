@@ -165,7 +165,7 @@ import { generateTemplate, getAllPositions, getAllSpeechGroups } from '../api/ap
 const form = reactive({
   encoding: 'Unicode',
   generateMode: 'sequential',
-  selectedPositions: ['a', 'b', 'c', 'd'],
+  selectedPositions: [],
   positions: {
     a: [],
     b: [],
