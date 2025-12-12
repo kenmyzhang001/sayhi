@@ -20,11 +20,12 @@ const (
 
 // TemplateRequest 模板生成请求
 type TemplateRequest struct {
-	Template     string        `json:"template" binding:"required"`
+	Template     string        `json:"template,omitempty"` // 模板（可选，如果不提供则根据位置自动生成）
 	Encoding     EncodingType  `json:"encoding" binding:"required"`
 	GenerateMode GenerateMode  `json:"generateMode" binding:"required"`
 	Positions    PositionConfig `json:"positions" binding:"required"`
 	SpeechGroups map[string]string `json:"speechGroups,omitempty"` // 位置 -> 话术组名称或ID的映射
+	SelectedPositions []string `json:"selectedPositions,omitempty"` // 选择的位置（如 ["a", "b", "c", "d"]）
 }
 
 // PositionConfig 位置配置

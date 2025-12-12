@@ -1,0 +1,32 @@
+# 短信模板生成系统配置文件
+# 可以通过环境变量覆盖这些配置
+
+# 服务器配置
+server:
+  host: "0.0.0.0"      # 服务器监听地址
+  port: "8080"          # 服务器端口
+  mode: "debug"         # 运行模式: debug, release, test
+
+# 数据库配置
+database:
+  type: "mysql"         # 数据库类型: mysql, postgresql, sqlite
+  host: "localhost"     # 数据库主机
+  port: "3306"          # 数据库端口
+  user: "root"          # 数据库用户名
+  password: ""          # 数据库密码
+  database: "sayhi"     # 数据库名称
+  charset: "utf8mb4"    # 字符集
+  max_idle: 10          # 最大空闲连接数
+  max_open: 100         # 最大打开连接数
+  # dsn: ""             # 完整连接字符串（可选，如果设置则优先使用）
+
+# JWT配置
+jwt:
+  secret: "sayhi-secret-key-change-in-production"  # JWT密钥（生产环境请修改）
+  expire_time: 24      # Token过期时间（小时）
+
+# 日志配置
+log:
+  level: "info"        # 日志级别: debug, info, warn, error
+  file: "logs/app.log" # 日志文件路径（可选）
+

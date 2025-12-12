@@ -25,33 +25,95 @@ func NewTemplateGenerator(speechService *SpeechService) *TemplateGenerator {
 
 // Generate 生成短信内容
 func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.GenerateResponse, error) {
-	// 解析模板
-	positions, rawTemplate, err := utils.ParseTemplate(req.Template)
-	if err != nil {
-		return nil, err
-	}
+	var positionKeys []string
+	var positionValues [][]string
 
-	if len(positions) == 0 {
-		return nil, fmt.Errorf("模板为空")
-	}
+	// 如果提供了模板，解析模板
+	if req.Template != "" {
+		positions, _, err := utils.ParseTemplate(req.Template)
+		if err != nil {
+			return nil, err
+		}
+		if len(positions) == 0 {
+			return nil, fmt.Errorf("模板为空")
+		}
 
-	// 解析位置值（支持话术组）
-	var speechGroups map[string]string
-	if req.SpeechGroups != nil {
-		speechGroups = req.SpeechGroups
-	}
-	positionValues, err := tg.resolvePositionValues(positions, req.Positions, speechGroups)
-	if err != nil {
-		return nil, err
+		// 从模板解析位置
+		positionKeys = []string{"a", "b", "c", "d"}
+		if len(positions) > len(positionKeys) {
+			// 扩展位置键
+			for i := len(positionKeys); i < len(positions); i++ {
+				positionKeys = append(positionKeys, string(rune('a'+i)))
+			}
+		}
+		positionKeys = positionKeys[:len(positions)]
+
+		// 解析位置值（支持话术组）
+		var speechGroups map[string]string
+		if req.SpeechGroups != nil {
+			speechGroups = req.SpeechGroups
+		}
+		positionValues, err = tg.resolvePositionValues(positions, req.Positions, speechGroups)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// 如果没有模板，使用选择的位置
+		if len(req.SelectedPositions) == 0 {
+			return nil, fmt.Errorf("请至少选择一个位置")
+		}
+
+		positionKeys = req.SelectedPositions
+		var speechGroups map[string]string
+		if req.SpeechGroups != nil {
+			speechGroups = req.SpeechGroups
+		}
+
+		// 根据选择的位置获取值
+		positionValues = make([][]string, 0, len(positionKeys))
+		for _, posKey := range positionKeys {
+			var values []string
+
+			// 优先检查是否指定了话术组
+			if speechGroups != nil {
+				if speechGroupName, exists := speechGroups[posKey]; exists {
+					speeches, err := tg.speechService.GetGroupSpeeches(speechGroupName)
+					if err == nil {
+						positionValues = append(positionValues, speeches)
+						continue
+					}
+				}
+			}
+
+			// 使用配置的位置值
+			switch posKey {
+			case "a":
+				values = req.Positions.A
+			case "b":
+				values = req.Positions.B
+			case "c":
+				values = req.Positions.C
+			case "d":
+				values = req.Positions.D
+			default:
+				return nil, fmt.Errorf("不支持的位置: %s", posKey)
+			}
+
+			if len(values) == 0 {
+				return nil, fmt.Errorf("位置 %s 没有配置值或话术组", posKey)
+			}
+
+			positionValues = append(positionValues, values)
+		}
 	}
 
 	// 生成所有组合
 	var results []models.GeneratedResult
 
 	if req.GenerateMode == models.GenerateSequential {
-		results = tg.generateSequential(rawTemplate, positionValues, req.Encoding)
+		results = tg.generateSequential(positionKeys, positionValues, req.Encoding)
 	} else {
-		results = tg.generateRandom(rawTemplate, positionValues, req.Encoding)
+		results = tg.generateRandom(positionKeys, positionValues, req.Encoding)
 	}
 
 	// 统计超出数量
@@ -63,8 +125,8 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 	}
 
 	return &models.GenerateResponse{
-		Results:      results,
-		TotalCount:   len(results),
+		Results:       results,
+		TotalCount:    len(results),
 		ExceededCount: exceededCount,
 	}, nil
 }
@@ -121,12 +183,12 @@ func (tg *TemplateGenerator) resolvePositionValues(positions []string, config mo
 }
 
 // generateSequential 顺序生成
-func (tg *TemplateGenerator) generateSequential(rawTemplate []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
 	var results []models.GeneratedResult
 	combinations := tg.generateCombinations(positionValues)
 
 	for _, combo := range combinations {
-		content := tg.buildContent(rawTemplate, combo)
+		content := tg.buildContentFromValues(positionKeys, combo)
 		charCount := utils.CountChars(content, encoding)
 		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
 		exceededChars := 0
@@ -135,9 +197,9 @@ func (tg *TemplateGenerator) generateSequential(rawTemplate []string, positionVa
 		}
 
 		results = append(results, models.GeneratedResult{
-			Content:      content,
-			CharCount:    charCount,
-			IsExceeded:   isExceeded,
+			Content:       content,
+			CharCount:     charCount,
+			IsExceeded:    isExceeded,
 			ExceededChars: exceededChars,
 		})
 	}
@@ -146,10 +208,10 @@ func (tg *TemplateGenerator) generateSequential(rawTemplate []string, positionVa
 }
 
 // generateRandom 随机生成
-func (tg *TemplateGenerator) generateRandom(rawTemplate []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
 	// 先生成所有组合
 	combinations := tg.generateCombinations(positionValues)
-	
+
 	// 随机打乱
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(combinations), func(i, j int) {
@@ -159,13 +221,18 @@ func (tg *TemplateGenerator) generateRandom(rawTemplate []string, positionValues
 	var results []models.GeneratedResult
 	for _, combo := range combinations {
 		// 随机打乱位置顺序
+		shuffledKeys := make([]string, len(positionKeys))
 		shuffledCombo := make([]string, len(combo))
+		copy(shuffledKeys, positionKeys)
 		copy(shuffledCombo, combo)
-		rand.Shuffle(len(shuffledCombo), func(i, j int) {
+
+		// 同时打乱键和值，保持对应关系
+		rand.Shuffle(len(shuffledKeys), func(i, j int) {
+			shuffledKeys[i], shuffledKeys[j] = shuffledKeys[j], shuffledKeys[i]
 			shuffledCombo[i], shuffledCombo[j] = shuffledCombo[j], shuffledCombo[i]
 		})
 
-		content := tg.buildContentRandom(rawTemplate, shuffledCombo)
+		content := tg.buildContentFromValues(shuffledKeys, shuffledCombo)
 		charCount := utils.CountChars(content, encoding)
 		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
 		exceededChars := 0
@@ -174,9 +241,9 @@ func (tg *TemplateGenerator) generateRandom(rawTemplate []string, positionValues
 		}
 
 		results = append(results, models.GeneratedResult{
-			Content:      content,
-			CharCount:    charCount,
-			IsExceeded:   isExceeded,
+			Content:       content,
+			CharCount:     charCount,
+			IsExceeded:    isExceeded,
 			ExceededChars: exceededChars,
 		})
 	}
@@ -212,25 +279,8 @@ func (tg *TemplateGenerator) generateCombinations(positionValues [][]string) [][
 	return result
 }
 
-// buildContent 构建内容（顺序）
-func (tg *TemplateGenerator) buildContent(rawTemplate []string, values []string) string {
-	content := strings.Join(rawTemplate, "")
-	for i, val := range values {
-		if i < len(rawTemplate) {
-			// 替换括号内容
-			old := rawTemplate[i]
-			content = strings.Replace(content, old, val, 1)
-		}
-	}
-	// 移除剩余的括号
-	content = strings.ReplaceAll(content, "(", "")
-	content = strings.ReplaceAll(content, ")", "")
-	return content
-}
-
-// buildContentRandom 构建内容（随机顺序）
-func (tg *TemplateGenerator) buildContentRandom(rawTemplate []string, values []string) string {
-	// 随机顺序：直接使用值，不按模板顺序
+// buildContentFromValues 根据位置键和值构建内容
+func (tg *TemplateGenerator) buildContentFromValues(positionKeys []string, values []string) string {
+	// 按位置顺序组合：a b c d 的值
 	return strings.Join(values, " ")
 }
-
