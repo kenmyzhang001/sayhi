@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// SpeechResolver 话术解析器接口
+type SpeechResolver interface {
+	ResolveSpeechGroup(nameOrID string) ([]string, error)
+}
+
 // ParseTemplate 解析模板，返回位置列表和原始模板结构
 func ParseTemplate(template string) ([]string, []string, error) {
 	// 匹配所有括号内容

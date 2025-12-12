@@ -47,6 +47,35 @@ CREATE TABLE IF NOT EXISTS `templates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模板配置表';
 
 -- ============================================
+-- 话术组表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `speech_groups` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '话术组ID',
+  `name` VARCHAR(100) NOT NULL COMMENT '话术组名称',
+  `description` VARCHAR(500) DEFAULT NULL COMMENT '描述',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_name` (`name`),
+  KEY `idx_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='话术组表';
+
+-- ============================================
+-- 话术内容表
+-- ============================================
+CREATE TABLE IF NOT EXISTS `speeches` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '话术ID',
+  `group_id` BIGINT UNSIGNED NOT NULL COMMENT '话术组ID',
+  `content` VARCHAR(500) NOT NULL COMMENT '话术内容',
+  `sort_order` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '排序顺序',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_group_id` (`group_id`),
+  KEY `idx_group_sort` (`group_id`, `sort_order`),
+  CONSTRAINT `fk_speeches_group` FOREIGN KEY (`group_id`) REFERENCES `speech_groups` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='话术内容表';
+
+-- ============================================
 -- 生成历史记录表（可选，用于记录生成历史）
 -- ============================================
 CREATE TABLE IF NOT EXISTS `generate_history` (
@@ -88,4 +117,27 @@ INSERT INTO `position_values` (`position`, `value`, `sort_order`) VALUES
 ('d', '9', 7),
 ('d', '10', 8)
 ON DUPLICATE KEY UPDATE `value`=`value`;
+
+-- 插入示例话术组
+INSERT INTO `speech_groups` (`name`, `description`) VALUES
+('数字3-10', '数字范围3到10'),
+('问候语', '常用问候语')
+ON DUPLICATE KEY UPDATE `name`=`name`;
+
+-- 插入示例话术内容
+INSERT INTO `speeches` (`group_id`, `content`, `sort_order`) 
+SELECT `id`, '3', 1 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '4', 2 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '5', 3 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '6', 4 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '7', 5 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '8', 6 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '9', 7 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '10', 8 FROM `speech_groups` WHERE `name` = '数字3-10'
+UNION ALL SELECT `id`, '您好', 1 FROM `speech_groups` WHERE `name` = '问候语'
+UNION ALL SELECT `id`, '早上好', 2 FROM `speech_groups` WHERE `name` = '问候语'
+UNION ALL SELECT `id`, '下午好', 3 FROM `speech_groups` WHERE `name` = '问候语'
+UNION ALL SELECT `id`, '晚上好', 4 FROM `speech_groups` WHERE `name` = '问候语'
+UNION ALL SELECT `id`, '欢迎', 5 FROM `speech_groups` WHERE `name` = '问候语'
+ON DUPLICATE KEY UPDATE `content`=`content`;
 

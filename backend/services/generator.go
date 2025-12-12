@@ -12,11 +12,15 @@ import (
 const MaxCharsPerSMS = 70
 
 // TemplateGenerator 模板生成器
-type TemplateGenerator struct{}
+type TemplateGenerator struct {
+	speechService *SpeechService
+}
 
 // NewTemplateGenerator 创建新的模板生成器
-func NewTemplateGenerator() *TemplateGenerator {
-	return &TemplateGenerator{}
+func NewTemplateGenerator(speechService *SpeechService) *TemplateGenerator {
+	return &TemplateGenerator{
+		speechService: speechService,
+	}
 }
 
 // Generate 生成短信内容
@@ -31,8 +35,12 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 		return nil, fmt.Errorf("模板为空")
 	}
 
-	// 解析位置值
-	positionValues, err := tg.resolvePositionValues(positions, req.Positions)
+	// 解析位置值（支持话术组）
+	var speechGroups map[string]string
+	if req.SpeechGroups != nil {
+		speechGroups = req.SpeechGroups
+	}
+	positionValues, err := tg.resolvePositionValues(positions, req.Positions, speechGroups)
 	if err != nil {
 		return nil, err
 	}
@@ -61,12 +69,32 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 	}, nil
 }
 
-// resolvePositionValues 解析所有位置的值
-func (tg *TemplateGenerator) resolvePositionValues(positions []string, config models.PositionConfig) ([][]string, error) {
+// resolvePositionValues 解析所有位置的值（支持话术组）
+func (tg *TemplateGenerator) resolvePositionValues(positions []string, config models.PositionConfig, speechGroups map[string]string) ([][]string, error) {
 	var positionValues [][]string
+
+	// 位置标识映射
+	positionKeys := []string{"a", "b", "c", "d"}
 
 	for i, pos := range positions {
 		var configValues []string
+		positionKey := ""
+		if i < len(positionKeys) {
+			positionKey = positionKeys[i]
+		}
+
+		// 优先检查是否指定了话术组
+		if speechGroups != nil && positionKey != "" {
+			if speechGroupName, exists := speechGroups[positionKey]; exists {
+				speeches, err := tg.speechService.GetGroupSpeeches(speechGroupName)
+				if err == nil {
+					positionValues = append(positionValues, speeches)
+					continue
+				}
+			}
+		}
+
+		// 使用配置的位置值
 		switch i {
 		case 0: // a
 			configValues = config.A

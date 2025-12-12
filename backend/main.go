@@ -31,11 +31,13 @@ func main() {
 	// 初始化服务
 	authService := services.NewAuthService()
 	positionService := services.NewPositionService()
+	speechService := services.NewSpeechService()
 
 	// 初始化处理器
 	authHandler := handlers.NewAuthHandler(authService)
-	templateHandler := handlers.NewTemplateHandler()
+	templateHandler := handlers.NewTemplateHandler(speechService)
 	positionHandler := handlers.NewPositionHandler(positionService)
+	speechHandler := handlers.NewSpeechHandler(speechService)
 
 	// 认证中间件
 	authMiddleware := middleware.AuthMiddleware(authService)
@@ -64,6 +66,13 @@ func main() {
 		api.POST("/positions", positionHandler.AddPositionValue)
 		api.PUT("/positions/:position", positionHandler.SetPositionValues)
 		api.DELETE("/positions/:position", positionHandler.DeletePositionValue)
+
+		// 话术组管理
+		api.GET("/speech-groups", speechHandler.GetAllGroups)
+		api.GET("/speech-groups/:id", speechHandler.GetGroup)
+		api.POST("/speech-groups", speechHandler.CreateGroup)
+		api.PUT("/speech-groups/:id", speechHandler.UpdateGroup)
+		api.DELETE("/speech-groups/:id", speechHandler.DeleteGroup)
 	}
 
 	// 健康检查

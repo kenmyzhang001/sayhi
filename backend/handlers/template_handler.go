@@ -14,9 +14,9 @@ type TemplateHandler struct {
 }
 
 // NewTemplateHandler 创建模板处理器
-func NewTemplateHandler() *TemplateHandler {
+func NewTemplateHandler(speechService *services.SpeechService) *TemplateHandler {
 	return &TemplateHandler{
-		generator: services.NewTemplateGenerator(),
+		generator: services.NewTemplateGenerator(speechService),
 	}
 }
 
