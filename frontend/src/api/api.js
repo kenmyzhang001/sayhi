@@ -90,3 +90,24 @@ export const getUserInfo = () => {
   return api.get('/auth/user')
 }
 
+// 话术组管理
+export const getAllSpeechGroups = () => {
+  return api.get('/speech-groups')
+}
+
+export const getSpeechGroup = (id) => {
+  return api.get(`/speech-groups/${id}`)
+}
+
+export const createSpeechGroup = (data) => {
+  return api.post('/speech-groups', data)
+}
+
+export const updateSpeechGroup = (id, data) => {
+  return api.put(`/speech-groups/${id}`, data)
+}
+
+export const deleteSpeechGroup = (id) => {
+  return api.delete(`/speech-groups/${id}`)
+}
+

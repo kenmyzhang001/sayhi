@@ -1,5 +1,5 @@
 <template>
-  <el-container class="app-container" v-if="isAuthenticated">
+  <el-container class="app-container">
     <el-header class="app-header">
       <h1>短信模板生成系统</h1>
       <div class="header-right">
@@ -10,9 +10,9 @@
           class="app-menu"
         >
           <el-menu-item index="1" @click="$router.push('/')">模板生成</el-menu-item>
-          <el-menu-item index="2" @click="$router.push('/config')">位置配置</el-menu-item>
+          <el-menu-item index="3" @click="$router.push('/speech-groups')">话术管理</el-menu-item>
         </el-menu>
-        <el-dropdown @command="handleCommand" class="user-dropdown">
+        <el-dropdown v-if="isAuthenticated" @command="handleCommand" class="user-dropdown">
           <span class="user-info">
             <el-icon><User /></el-icon>
             {{ username }}
@@ -24,13 +24,15 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-button v-else type="primary" @click="$router.push('/login')" class="login-button">
+          登录
+        </el-button>
       </div>
     </el-header>
     <el-main>
       <router-view />
     </el-main>
   </el-container>
-  <router-view v-else />
 </template>
 
 <script setup>
@@ -52,6 +54,8 @@ const username = computed(() => authState.username)
 watch(() => route.path, (path) => {
   if (path === '/config') {
     activeIndex.value = '2'
+  } else if (path === '/speech-groups') {
+    activeIndex.value = '3'
   } else if (path === '/') {
     activeIndex.value = '1'
   }
@@ -113,6 +117,10 @@ const handleCommand = async (command) => {
   gap: 5px;
   color: white;
   padding: 0 10px;
+}
+
+.login-button {
+  margin-left: 10px;
 }
 
 .app-menu {

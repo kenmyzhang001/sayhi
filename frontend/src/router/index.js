@@ -20,6 +20,12 @@ const routes = [
     name: 'PositionConfig',
     component: () => import('../views/PositionConfig.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/speech-groups',
+    name: 'SpeechGroups',
+    component: () => import('../views/SpeechGroups.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
