@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // Config 应用配置
@@ -28,8 +30,8 @@ type DatabaseConfig struct {
 	Password string
 	Database string
 	Charset  string
-	MaxIdle  int // 最大空闲连接数
-	MaxOpen  int // 最大打开连接数
+	MaxIdle  int    // 最大空闲连接数
+	MaxOpen  int    // 最大打开连接数
 	DSN      string // 完整连接字符串（如果提供则优先使用）
 }
 
@@ -43,6 +45,14 @@ var AppConfig *Config
 
 // LoadConfig 加载配置
 func LoadConfig() *Config {
+	// 加载 .env 文件（如果存在）
+	// 忽略错误，因为 .env 文件是可选的
+	if err := godotenv.Load(); err != nil {
+		// 尝试从 backend 目录加载
+		_ = godotenv.Load("../.env")
+		// 如果都不存在，使用环境变量或默认值
+	}
+
 	config := &Config{
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
@@ -108,4 +118,3 @@ func getEnvAsInt(key string, defaultValue int) int {
 	}
 	return defaultValue
 }
-
