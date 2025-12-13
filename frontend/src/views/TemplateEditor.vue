@@ -14,6 +14,12 @@
             <el-checkbox label="b">位置 B</el-checkbox>
             <el-checkbox label="c">位置 C</el-checkbox>
             <el-checkbox label="d">位置 D</el-checkbox>
+            <el-checkbox label="e">位置 E</el-checkbox>
+            <el-checkbox label="f">位置 F</el-checkbox>
+            <el-checkbox label="g">位置 G</el-checkbox>
+            <el-checkbox label="h">位置 H</el-checkbox>
+            <el-checkbox label="i">位置 I</el-checkbox>
+            <el-checkbox label="j">位置 J</el-checkbox>
           </el-checkbox-group>
           <div class="form-tip">
             <el-text type="info" size="small">
@@ -22,9 +28,9 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="话术组选择">
+        <el-form-item label="话术组选择" v-if="form.selectedPositions.length > 0">
           <div class="speech-group-selector">
-            <div v-for="pos in ['a', 'b', 'c', 'd']" :key="pos" class="speech-group-item">
+            <div v-for="pos in form.selectedPositions" :key="pos" class="speech-group-item">
               <el-text size="small">位置 {{ pos.toUpperCase() }}:</el-text>
               <el-select
                 v-model="form.speechGroups[pos]"
@@ -170,7 +176,13 @@ const form = reactive({
     a: [],
     b: [],
     c: [],
-    d: []
+    d: [],
+    e: [],
+    f: [],
+    g: [],
+    h: [],
+    i: [],
+    j: []
   },
   speechGroups: {}
 })
@@ -192,7 +204,13 @@ const loadPositions = async () => {
         a: data.positions.a || [],
         b: data.positions.b || [],
         c: data.positions.c || [],
-        d: data.positions.d || []
+        d: data.positions.d || [],
+        e: data.positions.e || [],
+        f: data.positions.f || [],
+        g: data.positions.g || [],
+        h: data.positions.h || [],
+        i: data.positions.i || [],
+        j: data.positions.j || []
       }
     }
   } catch (error) {
@@ -266,7 +284,7 @@ const handleGenerate = async () => {
 
 // 重置表单
 const handleReset = () => {
-  form.selectedPositions = ['a', 'b', 'c', 'd']
+  form.selectedPositions = []
   form.encoding = 'Unicode'
   form.generateMode = 'sequential'
   form.speechGroups = {}
