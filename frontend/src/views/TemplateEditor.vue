@@ -74,6 +74,22 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item label="最大字符限制">
+          <el-input-number
+            v-model="form.maxChars"
+            :min="1"
+            :max="1000"
+            :step="1"
+            style="width: 200px"
+            placeholder="请输入最大字符数"
+          />
+          <div class="form-tip">
+            <el-text type="info" size="small">
+              超过此字符数的内容将被标记为超出限制（默认：70）
+            </el-text>
+          </div>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" @click="handleGenerate" :loading="loading" :disabled="form.selectedPositions.length === 0">
             生成内容
@@ -171,6 +187,7 @@ import { generateTemplate, getAllPositions, getAllSpeechGroups } from '../api/ap
 
 const form = reactive({
   generateMode: 'sequential',
+  maxChars: 70,
   selectedPositions: [],
   positions: {
     a: [],
@@ -263,6 +280,7 @@ const handleGenerate = async () => {
     const requestData = {
       encodings: form.encodings,
       generateMode: form.generateMode,
+      maxChars: form.maxChars || 70,
       positions: form.positions,
       selectedPositions: form.selectedPositions,
       speechGroups: form.speechGroups
@@ -292,6 +310,7 @@ const handleGenerate = async () => {
 const handleReset = () => {
   form.selectedPositions = []
   form.generateMode = 'sequential'
+  form.maxChars = 70
   form.speechGroups = {}
   form.encodings = {}
   results.value = []
@@ -309,10 +328,11 @@ const handleEdit = (row) => {
 const handleSaveEdit = (row) => {
   if (editingIndex.value === row.index) {
     row.content = editingContent.value
-    // 重新计算字符数
+    // 重新计算字符数（使用当前配置的最大字符限制）
+    const maxChars = form.maxChars || 70
     row.charCount = editingContent.value.length
-    row.isExceeded = row.charCount > 70
-    row.exceededChars = row.isExceeded ? row.charCount - 70 : 0
+    row.isExceeded = row.charCount > maxChars
+    row.exceededChars = row.isExceeded ? row.charCount - maxChars : 0
     editingIndex.value = -1
     ElMessage.success('保存成功')
   }

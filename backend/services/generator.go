@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const MaxCharsPerSMS = 70
+const DefaultMaxCharsPerSMS = 70
 
 // TemplateGenerator 模板生成器
 type TemplateGenerator struct {
@@ -119,13 +119,19 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 		}
 	}
 
+	// 获取最大字符数限制，如果没有指定则使用默认值
+	maxChars := req.MaxChars
+	if maxChars <= 0 {
+		maxChars = DefaultMaxCharsPerSMS
+	}
+
 	// 生成所有组合
 	var results []models.GeneratedResult
 
 	if req.GenerateMode == models.GenerateSequential {
-		results = tg.generateSequential(positionKeys, positionValues, req.Encodings)
+		results = tg.generateSequential(positionKeys, positionValues, req.Encodings, maxChars)
 	} else {
-		results = tg.generateRandom(positionKeys, positionValues, req.Encodings)
+		results = tg.generateRandom(positionKeys, positionValues, req.Encodings, maxChars)
 	}
 
 	// 统计超出数量
@@ -195,7 +201,7 @@ func (tg *TemplateGenerator) resolvePositionValues(positions []string, config mo
 }
 
 // generateSequential 顺序生成
-func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType, maxChars int) []models.GeneratedResult {
 	var results []models.GeneratedResult
 	combinations := tg.generateCombinations(positionValues)
 
@@ -203,10 +209,10 @@ func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionV
 		content := tg.buildContentFromValues(positionKeys, combo)
 		// 使用每个位置对应的编码计算字符数
 		charCount := tg.countCharsWithPositionEncodings(positionKeys, combo, encodings)
-		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
+		isExceeded := utils.IsExceeded(charCount, maxChars)
 		exceededChars := 0
 		if isExceeded {
-			exceededChars = charCount - MaxCharsPerSMS
+			exceededChars = charCount - maxChars
 		}
 
 		results = append(results, models.GeneratedResult{
@@ -221,7 +227,7 @@ func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionV
 }
 
 // generateRandom 随机生成
-func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType, maxChars int) []models.GeneratedResult {
 	// 先生成所有组合
 	combinations := tg.generateCombinations(positionValues)
 
@@ -256,10 +262,10 @@ func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValue
 		content := tg.buildContentFromValues(shuffledKeys, shuffledCombo)
 		// 使用每个位置对应的编码计算字符数
 		charCount := tg.countCharsWithPositionEncodings(shuffledKeys, shuffledCombo, shuffledEncodings)
-		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
+		isExceeded := utils.IsExceeded(charCount, maxChars)
 		exceededChars := 0
 		if isExceeded {
-			exceededChars = charCount - MaxCharsPerSMS
+			exceededChars = charCount - maxChars
 		}
 
 		results = append(results, models.GeneratedResult{
@@ -302,7 +308,7 @@ func (tg *TemplateGenerator) generateCombinations(positionValues [][]string) [][
 }
 
 // buildContentFromValues 根据位置键和值构建内容
-func (tg *TemplateGenerator) buildContentFromValues(positionKeys []string, values []string) string {
+func (tg *TemplateGenerator) buildContentFromValues(_ []string, values []string) string {
 	// 按位置顺序组合：a b c d 的值
 	return strings.Join(values, " ")
 }
