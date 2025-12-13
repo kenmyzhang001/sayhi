@@ -28,7 +28,7 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="话术组选择" v-if="form.selectedPositions.length > 0">
+        <el-form-item label="话术组与编码" v-if="form.selectedPositions.length > 0">
           <div class="speech-group-selector">
             <div v-for="pos in form.selectedPositions" :key="pos" class="speech-group-item">
               <el-text size="small">位置 {{ pos.toUpperCase() }}:</el-text>
@@ -48,22 +48,23 @@
               <el-text v-if="form.speechGroups[pos]" type="success" size="small" style="margin-left: 10px">
                 ({{ getGroupSpeechCount(form.speechGroups[pos]) }} 条话术)
               </el-text>
+              <el-select
+                v-model="form.encodings[pos]"
+                placeholder="选择编码"
+                style="width: 150px; margin-left: 15px"
+              >
+                <el-option label="ASCII" value="ASCII" />
+                <el-option label="Zawgyi" value="Zawgyi" />
+                <el-option label="Unicode" value="Unicode" />
+                <el-option label="其它" value="Other" />
+              </el-select>
             </div>
           </div>
           <div class="form-tip">
             <el-text type="info" size="small">
-              如果为位置选择了话术组，将使用话术组的内容；否则使用位置配置的值
+              如果为位置选择了话术组，将使用话术组的内容；否则使用位置配置的值。每个位置需要选择对应的字符编码。
             </el-text>
           </div>
-        </el-form-item>
-
-        <el-form-item label="字符编码">
-          <el-select v-model="form.encoding" placeholder="请选择编码">
-            <el-option label="ASCII" value="ASCII" />
-            <el-option label="Zawgyi" value="Zawgyi" />
-            <el-option label="Unicode" value="Unicode" />
-            <el-option label="其它" value="Other" />
-          </el-select>
         </el-form-item>
 
         <el-form-item label="生成方式">
@@ -163,13 +164,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { generateTemplate, getAllPositions, getAllSpeechGroups } from '../api/api'
 
 const form = reactive({
-  encoding: 'Unicode',
   generateMode: 'sequential',
   selectedPositions: [],
   positions: {
@@ -184,7 +184,8 @@ const form = reactive({
     i: [],
     j: []
   },
-  speechGroups: {}
+  speechGroups: {},
+  encodings: {}
 })
 
 const loading = ref(false)
@@ -241,7 +242,7 @@ const handleGenerate = async () => {
     return
   }
 
-  // 验证每个选择的位置是否有配置或话术组
+  // 验证每个选择的位置是否有配置或话术组，以及是否有编码
   for (const pos of form.selectedPositions) {
     const hasPositionValue = form.positions[pos] && form.positions[pos].length > 0
     const hasSpeechGroup = form.speechGroups[pos]
@@ -250,12 +251,17 @@ const handleGenerate = async () => {
       ElMessage.warning(`位置 ${pos.toUpperCase()} 没有配置值或话术组，请先配置`)
       return
     }
+    
+    if (!form.encodings[pos]) {
+      ElMessage.warning(`位置 ${pos.toUpperCase()} 未选择字符编码，请先选择`)
+      return
+    }
   }
 
   loading.value = true
   try {
     const requestData = {
-      encoding: form.encoding,
+      encodings: form.encodings,
       generateMode: form.generateMode,
       positions: form.positions,
       selectedPositions: form.selectedPositions,
@@ -285,9 +291,9 @@ const handleGenerate = async () => {
 // 重置表单
 const handleReset = () => {
   form.selectedPositions = []
-  form.encoding = 'Unicode'
   form.generateMode = 'sequential'
   form.speechGroups = {}
+  form.encodings = {}
   results.value = []
   totalCount.value = 0
   exceededCount.value = 0
@@ -407,6 +413,23 @@ const downloadFile = (content, filename, mimeType) => {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+// 监听选中位置变化，为新选中的位置设置默认编码
+watch(() => form.selectedPositions, (newPositions, oldPositions) => {
+  // 找出新添加的位置
+  const addedPositions = newPositions.filter(pos => !oldPositions.includes(pos))
+  // 为新位置设置默认编码
+  addedPositions.forEach(pos => {
+    if (!form.encodings[pos]) {
+      form.encodings[pos] = 'Unicode'
+    }
+  })
+  // 移除已取消选择的位置的编码
+  const removedPositions = oldPositions.filter(pos => !newPositions.includes(pos))
+  removedPositions.forEach(pos => {
+    delete form.encodings[pos]
+  })
+}, { immediate: false })
 
 onMounted(() => {
   loadPositions()

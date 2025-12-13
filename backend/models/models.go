@@ -4,8 +4,8 @@ package models
 type EncodingType string
 
 const (
-	EncodingASCII  EncodingType = "ASCII"
-	EncodingZawgyi EncodingType = "Zawgyi"
+	EncodingASCII   EncodingType = "ASCII"
+	EncodingZawgyi  EncodingType = "Zawgyi"
 	EncodingUnicode EncodingType = "Unicode"
 	EncodingOther   EncodingType = "Other"
 )
@@ -20,12 +20,13 @@ const (
 
 // TemplateRequest 模板生成请求
 type TemplateRequest struct {
-	Template     string        `json:"template,omitempty"` // 模板（可选，如果不提供则根据位置自动生成）
-	Encoding     EncodingType  `json:"encoding" binding:"required"`
-	GenerateMode GenerateMode  `json:"generateMode" binding:"required"`
-	Positions    PositionConfig `json:"positions" binding:"required"`
-	SpeechGroups map[string]string `json:"speechGroups,omitempty"` // 位置 -> 话术组名称或ID的映射
-	SelectedPositions []string `json:"selectedPositions,omitempty"` // 选择的位置（如 ["a", "b", "c", "d"]）
+	Template          string                  `json:"template,omitempty"`           // 模板（可选，如果不提供则根据位置自动生成）
+	Encoding          EncodingType            `json:"encoding,omitempty"`           // 兼容旧版本，已废弃，使用 Encodings
+	Encodings         map[string]EncodingType `json:"encodings" binding:"required"` // 位置 -> 编码类型的映射
+	GenerateMode      GenerateMode            `json:"generateMode" binding:"required"`
+	Positions         PositionConfig          `json:"positions" binding:"required"`
+	SpeechGroups      map[string]string       `json:"speechGroups,omitempty"`      // 位置 -> 话术组名称或ID的映射
+	SelectedPositions []string                `json:"selectedPositions,omitempty"` // 选择的位置（如 ["a", "b", "c", "d"]）
 }
 
 // PositionConfig 位置配置
@@ -34,21 +35,27 @@ type PositionConfig struct {
 	B []string `json:"b"`
 	C []string `json:"c"`
 	D []string `json:"d"`
+	E []string `json:"e,omitempty"`
+	F []string `json:"f,omitempty"`
+	G []string `json:"g,omitempty"`
+	H []string `json:"h,omitempty"`
+	I []string `json:"i,omitempty"`
+	J []string `json:"j,omitempty"`
 }
 
 // GeneratedResult 生成结果
 type GeneratedResult struct {
-	Content      string `json:"content"`
-	CharCount    int    `json:"charCount"`
-	IsExceeded   bool   `json:"isExceeded"`
-	ExceededChars int   `json:"exceededChars"`
+	Content       string `json:"content"`
+	CharCount     int    `json:"charCount"`
+	IsExceeded    bool   `json:"isExceeded"`
+	ExceededChars int    `json:"exceededChars"`
 }
 
 // GenerateResponse 生成响应
 type GenerateResponse struct {
-	Results      []GeneratedResult `json:"results"`
-	TotalCount   int               `json:"totalCount"`
-	ExceededCount int              `json:"exceededCount"`
+	Results       []GeneratedResult `json:"results"`
+	TotalCount    int               `json:"totalCount"`
+	ExceededCount int               `json:"exceededCount"`
 }
 
 // PositionValue 位置值配置
@@ -68,4 +75,3 @@ type PositionValueRequest struct {
 type PositionValueListResponse struct {
 	Positions map[string][]string `json:"positions"`
 }
-

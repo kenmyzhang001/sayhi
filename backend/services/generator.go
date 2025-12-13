@@ -95,6 +95,18 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 				values = req.Positions.C
 			case "d":
 				values = req.Positions.D
+			case "e":
+				values = req.Positions.E
+			case "f":
+				values = req.Positions.F
+			case "g":
+				values = req.Positions.G
+			case "h":
+				values = req.Positions.H
+			case "i":
+				values = req.Positions.I
+			case "j":
+				values = req.Positions.J
 			default:
 				return nil, fmt.Errorf("不支持的位置: %s", posKey)
 			}
@@ -111,9 +123,9 @@ func (tg *TemplateGenerator) Generate(req *models.TemplateRequest) (*models.Gene
 	var results []models.GeneratedResult
 
 	if req.GenerateMode == models.GenerateSequential {
-		results = tg.generateSequential(positionKeys, positionValues, req.Encoding)
+		results = tg.generateSequential(positionKeys, positionValues, req.Encodings)
 	} else {
-		results = tg.generateRandom(positionKeys, positionValues, req.Encoding)
+		results = tg.generateRandom(positionKeys, positionValues, req.Encodings)
 	}
 
 	// 统计超出数量
@@ -183,13 +195,14 @@ func (tg *TemplateGenerator) resolvePositionValues(positions []string, config mo
 }
 
 // generateSequential 顺序生成
-func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType) []models.GeneratedResult {
 	var results []models.GeneratedResult
 	combinations := tg.generateCombinations(positionValues)
 
 	for _, combo := range combinations {
 		content := tg.buildContentFromValues(positionKeys, combo)
-		charCount := utils.CountChars(content, encoding)
+		// 使用每个位置对应的编码计算字符数
+		charCount := tg.countCharsWithPositionEncodings(positionKeys, combo, encodings)
 		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
 		exceededChars := 0
 		if isExceeded {
@@ -208,7 +221,7 @@ func (tg *TemplateGenerator) generateSequential(positionKeys []string, positionV
 }
 
 // generateRandom 随机生成
-func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValues [][]string, encoding models.EncodingType) []models.GeneratedResult {
+func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValues [][]string, encodings map[string]models.EncodingType) []models.GeneratedResult {
 	// 先生成所有组合
 	combinations := tg.generateCombinations(positionValues)
 
@@ -223,6 +236,7 @@ func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValue
 		// 随机打乱位置顺序
 		shuffledKeys := make([]string, len(positionKeys))
 		shuffledCombo := make([]string, len(combo))
+		shuffledEncodings := make(map[string]models.EncodingType)
 		copy(shuffledKeys, positionKeys)
 		copy(shuffledCombo, combo)
 
@@ -232,8 +246,16 @@ func (tg *TemplateGenerator) generateRandom(positionKeys []string, positionValue
 			shuffledCombo[i], shuffledCombo[j] = shuffledCombo[j], shuffledCombo[i]
 		})
 
+		// 更新编码映射以匹配打乱后的位置
+		for i, key := range shuffledKeys {
+			if encoding, exists := encodings[positionKeys[i]]; exists {
+				shuffledEncodings[key] = encoding
+			}
+		}
+
 		content := tg.buildContentFromValues(shuffledKeys, shuffledCombo)
-		charCount := utils.CountChars(content, encoding)
+		// 使用每个位置对应的编码计算字符数
+		charCount := tg.countCharsWithPositionEncodings(shuffledKeys, shuffledCombo, shuffledEncodings)
 		isExceeded := utils.IsExceeded(charCount, MaxCharsPerSMS)
 		exceededChars := 0
 		if isExceeded {
@@ -283,4 +305,28 @@ func (tg *TemplateGenerator) generateCombinations(positionValues [][]string) [][
 func (tg *TemplateGenerator) buildContentFromValues(positionKeys []string, values []string) string {
 	// 按位置顺序组合：a b c d 的值
 	return strings.Join(values, " ")
+}
+
+// countCharsWithPositionEncodings 使用每个位置对应的编码计算总字符数
+// 每个位置的值使用该位置对应的编码来计算字符数，然后相加
+// 空格按ASCII编码计算（每个空格1个字符）
+func (tg *TemplateGenerator) countCharsWithPositionEncodings(positionKeys []string, values []string, encodings map[string]models.EncodingType) int {
+	totalCount := 0
+	spaceCount := len(values) - 1 // 空格的数量
+
+	for i, key := range positionKeys {
+		if i < len(values) {
+			encoding := models.EncodingUnicode // 默认编码
+			if enc, exists := encodings[key]; exists {
+				encoding = enc
+			}
+			// 计算该位置值的字符数
+			totalCount += utils.CountChars(values[i], encoding)
+		}
+	}
+
+	// 添加空格（空格按ASCII计算，每个空格1个字符）
+	totalCount += spaceCount
+
+	return totalCount
 }

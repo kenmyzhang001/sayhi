@@ -43,4 +43,3 @@ func countZawgyi(text string) int {
 func IsExceeded(charCount int, limit int) bool {
 	return charCount > limit
 }
-
